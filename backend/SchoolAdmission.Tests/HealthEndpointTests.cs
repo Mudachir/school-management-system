@@ -1,15 +1,14 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
-using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace SchoolAdmission.Tests;
 
-public sealed class HealthEndpointTests : IClassFixture<WebApplicationFactory<Program>>
+public sealed class HealthEndpointTests : IClassFixture<ApiWithoutExpirationWorkerFactory>
 {
-    private readonly WebApplicationFactory<Program> factory;
+    private readonly ApiWithoutExpirationWorkerFactory factory;
 
-    public HealthEndpointTests(WebApplicationFactory<Program> factory)
+    public HealthEndpointTests(ApiWithoutExpirationWorkerFactory factory)
     {
         this.factory = factory;
     }

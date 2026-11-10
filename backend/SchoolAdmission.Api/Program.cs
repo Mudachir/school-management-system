@@ -1,10 +1,12 @@
 using SchoolAdmission.Api.Configuration;
 using SchoolAdmission.Api.Data;
 using Microsoft.EntityFrameworkCore;
+using SchoolAdmission.Api.Background;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
+builder.Services.AddHoldExpiration(builder.Configuration);
 builder.Services.AddOptions<HoldOptions>()
     .Bind(builder.Configuration)
     .Validate(options => options.DurationSeconds > 0,
