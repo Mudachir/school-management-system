@@ -1,4 +1,4 @@
-# Backend foundation (M1 and M2)
+# School Admission backend (M1–M3)
 
 The backend is a single ASP.NET Core Web API targeting .NET 10, with an xUnit
 integration test project. Future modules will live within the API project.
@@ -21,8 +21,8 @@ In a second terminal:
 curl -i http://localhost:8080/health
 ```
 
-The only endpoint is controller-based `GET /health`, returning HTTP 200 with
-`{"status":"healthy"}`.
+The liveness endpoint is controller-based `GET /health`, returning HTTP 200 with
+`{"status":"healthy"}`. Class creation and read endpoints are described below.
 
 Configuration uses standard ASP.NET Core providers, including environment variables:
 
@@ -63,6 +63,71 @@ EF Core 10.0.14 with Npgsql EF provider 10.0.3. All Microsoft EF packages and th
 local `dotnet-ef` tool are pinned to 10.0.14. The API never applies migrations at
 startup. UUIDs are generated in .NET; callers must supply UTC timestamps.
 
+## M3 class management APIs
+
+Configure `ConnectionStrings__DefaultConnection` and apply the existing migration
+as above, then start the API:
+
+```bash
+cd SchoolAdmission.Api
+ASPNETCORE_URLS=http://localhost:8080 dotnet run --no-launch-profile
+```
+
+In another terminal, create a class:
+
+```bash
+curl -i http://localhost:8080/classes \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"Class 6 - Morning Shift","totalSeats":120}'
+```
+
+Returns `201 Created`, a `Location` header for the new class, and JSON such as:
+
+```json
+{"id":"019a69d3-1c00-7000-8000-000000000001","name":"Class 6 - Morning Shift","totalSeats":120}
+```
+
+IDs are UUID strings. Use the returned ID or Location for a detail request:
+
+```bash
+curl -i http://localhost:8080/classes
+curl -i http://localhost:8080/classes/019a69d3-1c00-7000-8000-000000000001
+```
+
+Both GET routes return `200 OK`. The list is an array ordered by name with an ID
+tie-breaker, or `[]` when empty. A detail response, or one list item, looks like:
+
+```json
+{
+  "id":"019a69d3-1c00-7000-8000-000000000001",
+  "name":"Class 6 - Morning Shift",
+  "totalSeats":120,
+  "heldSeats":0,
+  "confirmedSeats":0,
+  "availableSeats":120
+}
+```
+
+POST trims surrounding name whitespace before validation and storage. Name must
+be nonblank and at most 150 characters after trimming. `totalSeats` must be a JSON
+integer from 1 to 2147483647; missing, null, fractional, quoted, or out-of-range
+values are rejected. Invalid input or malformed JSON returns `400` with an
+`application/problem+json` validation response and field errors. A malformed
+UUID in the detail route returns `400`; a well-formed but unknown UUID returns
+`404`. Names already present, including case differences or surrounding
+whitespace, return `409` with a ProblemDetails title:
+`A class with this name already exists.` The existing PostgreSQL unique index
+enforces this even for racing inserts; only its specific `23505` violation is
+caught. Other database exceptions retain normal error handling.
+
+Each GET captures one UTC time and executes one no-tracking, server-side aggregate
+query. HELD rows count only when `ExpiresAt > now`; CONFIRMED rows always count.
+EXPIRED, CANCELLED, and stale HELD rows do not consume seats. Available seats are
+`max(0, totalSeats - heldSeats - confirmedSeats)`. Raw held/confirmed counts remain
+visible if seeded data exceeds capacity. GET never changes statuses. No cached
+counters, reservation endpoints, capacity enforcement, locking services, or
+expiration worker are implemented in M3; those remain later work.
+
 ## Real PostgreSQL tests
 
 ```bash
@@ -84,6 +149,25 @@ drop, SQLite, or EF InMemory provider is used. Use this database exclusively for
 tests: its schema persists, but test records do not. If a connection is supplied
 and PostgreSQL is unreachable, tests fail instead of silently skipping.
 
+The M3 HTTP tests use `WebApplicationFactory<Program>` and the existing guarded
+PostgreSQL fixture. Each test's HTTP request contexts share its PostgreSQL
+transaction and connection; requests are sequential within the test. Initial
+deletes give list tests an empty view inside that transaction. All deletes,
+seeding, and HTTP writes roll back on disposal, preserving persistent records.
+Tests within the HTTP test class run sequentially; existing schema tests retain
+their own isolated transactions. No normal development database is used.
+
+Run only M3 HTTP tests with:
+
+```bash
+dotnet test SchoolAdmission.sln --no-build --filter 'FullyQualifiedName~ClassEndpointsTests'
+```
+
+These tests cover creation/persistence/Location, name and seat validation,
+case-insensitive conflicts, ordered/empty lists, UUID errors, effective counts
+across multiple classes, stale HELD rows, read-only behavior, and over-capacity
+display. Query interception verifies one database read per GET.
+
 The PostgreSQL suite checks valid persistence, all active-status duplicate pairs,
 expired/cancelled history, malformed birth-registration numbers, seat counts,
 status validation, case-insensitive class names, foreign keys, column types,
@@ -97,6 +181,4 @@ docker compose -f compose.db.yml down
 ```
 
 The schema and exact quoted PostgreSQL identifiers are documented in
-[`docs/DATABASE_DESIGN.md`](../docs/DATABASE_DESIGN.md). Verification status and
-remaining local checks are recorded in
-[`docs/IMPLEMENTATION_PLAN.md`](../docs/IMPLEMENTATION_PLAN.md).
+[`docs/DATABASE_DESIGN.md`](../docs/DATABASE_DESIGN.md).

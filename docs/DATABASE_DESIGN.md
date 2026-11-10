@@ -38,9 +38,9 @@ in mind when changing Name or renaming the table in future migrations.
 No time expression appears in the partial index. A HELD record remains protected
 even after ExpiresAt elapses until a later milestone explicitly changes its
 status. Expired and cancelled history may coexist with a new active application.
-Class-name trimming, capacity accounting, transaction/row-lock services, status
-transitions, and expiration workers are deferred. No cached seat counters exist.
+Class-name trimming is handled by M3 class creation. Read APIs derive effective
+seat counts without updating history. Capacity enforcement, transaction/row-lock
+services, status transitions, and expiration workers remain deferred. No cached
+seat counters exist.
 
-These are implemented definitions, not a claim of verified PostgreSQL behavior.
-See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for actual verification status
-and [backend/README.md](../backend/README.md) for local commands.
+See [backend/README.md](../backend/README.md) for local commands and API behavior.
