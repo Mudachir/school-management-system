@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { API_BASE_URL } from '../../../api/client.js'
-import { getClasses } from './classService.js'
+import { ClassApiError, createClass, getClassById, getClasses } from './classService.js'
 
 // Test-only contract fixtures; the application never imports or falls back to them.
 const classSummary = {
@@ -64,4 +64,42 @@ test('abort is forwarded and rejects the request', async () => {
   }
   controller.abort()
   await assert.rejects(getClasses({ signal: controller.signal }), { name: 'AbortError' })
+})
+
+test('details request uses the selected UUID and rejects mismatched responses', async () => {
+  let requested
+  globalThis.fetch = async (url) => { requested = url; return Response.json(classSummary) }
+  assert.deepEqual(await getClassById(classSummary.id), classSummary)
+  assert.equal(requested, `${API_BASE_URL}/classes/${classSummary.id}`)
+  globalThis.fetch = async () => Response.json({ ...classSummary, id: 'another-id' })
+  await assert.rejects(getClassById(classSummary.id), /invalid class details/)
+})
+
+test('invalid UUIDs do not send requests and 404 remains distinguishable', async () => {
+  globalThis.fetch = () => { throw new Error('Unexpected request') }
+  await assert.rejects(getClassById('not-a-uuid'), (error) => error instanceof ClassApiError && error.status === 400)
+  globalThis.fetch = async () => Response.json({ title: 'Not Found' }, { status: 404 })
+  await assert.rejects(getClassById(classSummary.id), (error) => error.status === 404)
+})
+
+test('POST sends exactly the generated name and capacity and consumes the real 201 contract', async () => {
+  const payload = { name: 'KG - Day Shift', totalSeats: 24 }
+  const created = { id: classSummary.id, ...payload }
+  let request
+  globalThis.fetch = async (...args) => { request = args; return Response.json(created, { status: 201 }) }
+  assert.deepEqual(await createClass(payload), created)
+  assert.equal(request[0], `${API_BASE_URL}/classes`)
+  assert.equal(request[1].method, 'POST')
+  assert.deepEqual(request[1].headers, { Accept: 'application/json', 'Content-Type': 'application/json' })
+  assert.deepEqual(JSON.parse(request[1].body), payload)
+})
+
+test('POST preserves duplicate and validation ProblemDetails, and rejects fake success responses', async () => {
+  const payload = { name: 'KG - Day Shift', totalSeats: 24 }
+  globalThis.fetch = async () => Response.json({ title: 'A class with this name already exists.' }, { status: 409 })
+  await assert.rejects(createClass(payload), (error) => error.status === 409 && error.message.includes('already exists'))
+  globalThis.fetch = async () => Response.json({ title: 'Validation failed.', errors: { TotalSeats: ['TotalSeats must be a positive integer.'] } }, { status: 400 })
+  await assert.rejects(createClass(payload), (error) => error.status === 400 && error.fields.TotalSeats.length === 1)
+  globalThis.fetch = async () => Response.json({}, { status: 201 })
+  await assert.rejects(createClass(payload), /Could not confirm creation/)
 })

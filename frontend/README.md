@@ -1,35 +1,22 @@
 # School Admission System Frontend
 
-F2 implements the admin dashboard using real `GET /classes` data inside the F1
-React + Vite shell. Admission Classes, Class Details, and Create Class remain
-F3-F5 placeholders. The shared sidebar, header, fonts, and layout are reused.
+Admin milestones F1-F5 provide the shared shell, API-connected Dashboard,
+searchable Admission Classes page, Class Details, and one shared creation modal.
+The parent portal and admission/hold operations are outside this frontend scope.
 
-## Requirements and installation
+## Setup and local servers
 
-- Node.js 22.12 or newer and npm.
-
-From the repository root:
+Use Node.js 22.12+ and npm. From the repository root:
 
 ```sh
 cd frontend
 npm install
-```
-
-On Windows, if PowerShell blocks `npm.ps1`, use `npm.cmd` instead of `npm`.
-
-## Development
-
-From `frontend/`:
-
-```sh
 npm run dev
 ```
 
-Open the URL printed by Vite (normally http://localhost:5173). Run the existing
-backend and PostgreSQL separately, following the backend README. The dashboard
-shows an error and Retry when the API is unavailable; there is no mock fallback.
-
-## Build, lint, and preview
+Start the existing backend and PostgreSQL separately using the backend README.
+Open the URL printed by Vite, normally http://localhost:5173. In PowerShell, use
+`npm.cmd` if execution policy blocks `npm.ps1`.
 
 ```sh
 npm run lint
@@ -38,189 +25,149 @@ npm run build
 npm run preview
 ```
 
-`build` writes production assets to `dist/`. `preview` serves that build locally;
-it is not a production hosting server. Both development and preview forward
-same-origin `/api` requests to the configured backend, so a normal build followed
-by preview can display real dashboard data without backend CORS changes.
-Oxlint retains the F0 `.oxlintrc.json`. `npm test` uses Node's built-in runner for
-API URL/proxy behavior, the class-service contract, dashboard calculations,
-announcements, and text contrast; it requires no additional test dependencies.
+Lint retains the existing Oxlint configuration. Tests use Node's built-in runner
+and require no additional framework. `build` writes `dist/`; `preview` serves the
+production build locally and is not a production hosting server.
 
-## Routes
+## API configuration
 
-| URL | Screen | Current content | Active sidebar link |
-| --- | --- | --- | --- |
-| `/` | Redirect | Replaces the history entry with `/admin` | Dashboard |
-| `/admin` | Dashboard | Live metrics, occupancy, and read-only class summary | Dashboard |
-| `/admin/classes` | Admission Classes | Coming in F3 | Admission Classes |
-| `/admin/classes/:classId` | Class Details | Coming in F4; back link | Admission Classes |
-| `/admin/classes/new` | Create Class | Coming in F5 | Create Class |
-| Other URLs | Page not found | Link to Dashboard | None |
-
-React Router handles browser navigation and history. The static `new` route has
-priority over the class ID parameter. `NavLink` supplies active styles and
-`aria-current`; the classes link includes details but excludes the creation route.
-For production hosting, configure an SPA fallback to `index.html` for frontend
-routes. Vite's development and preview servers already support direct refreshes.
-
-## Environment and API client
-
-Optionally copy `.env.example` to `.env.local`:
-
-```sh
-cp .env.example .env.local
-```
-
-On PowerShell, use `Copy-Item .env.example .env.local`.
+Optionally copy `.env.example` to `.env.local` (`Copy-Item` on PowerShell):
 
 ```dotenv
 API_PROXY_TARGET=http://localhost:8080
 ```
 
-`src/api/client.js` always uses the same-origin `/api` prefix, in development,
-preview, and production builds. Backend addresses are not embedded in browser
-bundles. `API_PROXY_TARGET` is a server-only Vite setting; unset or blank values
-default to `http://localhost:8080`, and trailing slashes are removed. It may also
-be set in the shell that starts Vite. Restart development or preview after
-changing the target. Preview uses production-mode environment files, plus
-`.env` / `.env.local`, just as Vite does normally.
+The centralized browser client always uses same-origin `/api`. Both Vite
+servers strip that prefix and forward to the server-only `API_PROXY_TARGET`.
+The default is `http://localhost:8080`; restart the server when changing it.
+Absolute legacy `VITE_API_BASE_URL` values remain a server-side fallback.
+Backend hostnames are not compiled into browser production bundles.
 
-Older absolute `VITE_API_BASE_URL` values remain supported only as a server-side
-fallback when `API_PROXY_TARGET` is not supplied. Migrate local configuration to
-`API_PROXY_TARGET`; the browser no longer reads `VITE_API_BASE_URL`.
+Actual deployment needs a web-server/reverse-proxy rule forwarding `/api/*` to
+the backend with `/api` stripped, plus an independent frontend SPA fallback to
+`index.html`. Vite's local proxy configuration is not a deployed hosting setup.
 
-Feature services import `apiClient(path, options)` to call paths relative to
-that base URL. It returns the native fetch `Response`; callers will handle status
-codes and response bodies according to the endpoint contract. Importing the client
-does not trigger a request. Visual components contain no API URLs or fetch calls.
-Local environment files, dependencies, and build output are ignored;
-`.env.example` is shareable.
+Admin API contracts used:
 
-For example, the browser requests `/api/classes` from the development or preview
-origin. Vite strips `/api` and forwards `/classes` to `API_PROXY_TARGET`. Both
-server modes use the same explicit proxy rules; `/apiary` and other unrelated
-paths are not matched.
+- `GET /classes`: class summaries with `id`, `name`, `totalSeats`, `heldSeats`,
+  `confirmedSeats`, and `availableSeats`.
+- `GET /classes/{classId}`: one class summary. Invalid UUIDs are rejected locally;
+  backend 404 responses show a distinct not-found state.
+- `POST /classes`: JSON `{ name, totalSeats }`; expects 201 with `id`, `name`,
+  and `totalSeats`. Duplicate 409 and validation 400 ProblemDetails are preserved.
 
-Actual production deployment is different from Vite preview. Configure the web
-server, reverse proxy, or hosting platform to forward `/api/*` to the real
-backend, stripping `/api` to preserve backend paths such as `/classes`. Also
-configure the frontend SPA history fallback separately. `API_PROXY_TARGET` only
-controls Vite's local servers; it does not configure deployed hosting. Neither
-Vite proxy rules nor the backend target are bundled into the static browser app.
+Admin requests do not send `X-Student-Id`. All displayed data comes from the API;
+there are no sample records or mock fallbacks in the application.
 
-## Component structure
+## Routes and modal history
+
+| URL | Content |
+| --- | --- |
+| `/` | Redirects to `/admin` |
+| `/admin` | Dashboard metrics, occupancy, read-only class summary |
+| `/admin/classes` | Admission Classes with client-side search |
+| `/admin/classes/:classId` | Class-specific details and utilization |
+| `/admin/classes/new` | Redirects to `/admin/classes?create=class` |
+| Any admin view with `?create=class` | Shared Create Admission Class modal |
+| Other paths | Page-not-found state |
+
+Dashboard, list, and sidebar actions open the same modal on the current page.
+The current underlying sidebar item stays active. Opening adds a history entry;
+Back/Escape/Cancel close it, Forward reopens it, and directly loading a modal URL
+also works. Form state resets when the modal closes. Closing restores the opener's
+focus, or focuses the main region if navigation removed that opener.
+
+The native dialog provides a top-layer backdrop and inert background. Explicit
+Tab/Shift+Tab wrapping, initial field focus, Escape handling, scroll locking,
+labels, inline errors, and persistent live announcements support keyboard use.
+Close, Escape, backdrop clicks, duplicate submits, and in-app/history navigation
+are blocked while a POST is pending. A failed or timed-out POST may have reached
+the server; the UI asks users to check the list before trying again. No automatic
+POST retry is performed.
+
+## Feature structure and reuse
 
 ```text
 src/
-  App.jsx                         Browser router and route metadata
-  main.jsx                        React root and local font imports
-  index.css                       Reset, typography, focus, cards and buttons
-  styles/tokens.css               Shared color, font, spacing and shape tokens
-  components/admin/
-    AdminLayout.jsx               Sidebar, header and nested route outlet
-    AdminSidebar.jsx              Brand, three NavLinks and workspace footer
-    AdminHeader.jsx               Route title and static admin profile visual
-    admin.css                     Shell layout and responsive styles
-  pages/
-    MilestonePlaceholder.jsx      Shared F3-F5 placeholder
-    NotFound.jsx                  Unknown-route fallback
-  api/client.js                   Shared API base URL and fetch wrapper
-  api/client.test.js              Same-origin URL and side-effect checks
-  features/classes/services/
-    classService.js               GET /classes and response validation
-    classService.test.js          Request, failure and response contract checks
-  features/dashboard/
-    DashboardPage.jsx             Composes the dashboard view
-    dashboard.css                 Scoped responsive dashboard styles
-    components/
-      DashboardIntro.jsx          Intro, refresh and create navigation
-      MetricCard.jsx              Reusable value, caption and icon card
-      SeatOccupancy.jsx           Stacked bar and labelled seat totals
-      DashboardClassTable.jsx     Read-only table and empty state
-      DashboardState.jsx          Loading and error/retry presentation
-      DashboardAnnouncement.jsx   Persistent live region outside busy content
-    hooks/useDashboardClasses.js  Loading, errors, cancellation and refresh
-    model/
-      dashboardSummary.js         Pure totals and safe bar proportions
-      dashboardSummary.test.js    Empty, zero-capacity and inconsistent-count checks
-      formatCount.js              Shared numeric presentation
-      dashboardAnnouncement.js    Loading, success, empty and error messages
-      dashboardAnnouncement.test.js Announcement contract checks
+  App.jsx                            Existing browser-router configuration
+  api/client.js                      Shared same-origin HTTP client
+  components/admin/                  F1 layout, sidebar, route header
+  components/ui/
+    LiveAnnouncement.jsx             Persistent polite status outside busy content
+    RequestState.jsx                 Shared loading/error/retry presentation
+  features/classes/
+    pages/ClassesPage.jsx             Thin searchable-list view
+    pages/ClassDetailsPage.jsx        Thin parameter-driven detail view
+    components/ClassesTable.jsx       Shared F2/F3 table with real-ID links
+    components/ClassDetailsStats.jsx  Reuses F2 metric cards
+    components/CreateClassModal.jsx   One accessible structured form/dialog
+    components/CreateClassButton.jsx  Shared dashboard/list entry action
+    components/ClassManagementNotice.jsx  Success status
+    context/ClassManagementProvider.jsx  Modal URL/history and creation invalidation
+    hooks/useClassResource.js         Shared cancellation/timeout/stale guards
+    hooks/useClasses.js               List resource
+    hooks/useClassDetails.js          Selected-class resource
+    hooks/useCreateClass.js           Form, validation, POST and navigation guard
+    services/classService.js          GET/POST, contracts and ProblemDetails
+    helpers/                         Search, naming/validation and utilization
+    classes.css                      Class management/modal styles
+  features/dashboard/                F2 presentation, totals and shared primitives
+  styles/tokens.css                  Colors, spacing, typography, shapes
 ```
 
-`vite.config.test.js` checks shared development/preview proxy behavior and target
-configuration. `src/styles/tokens.test.js` checks normal-text contrast against the
-actual shared color values.
+The F2 dashboard wraps the shared `useClasses` hook and uses `ClassesTable`.
+Shared request state and live-region primitives were extracted without adding a
+second API client or state-management dependency. The existing F2 formatter,
+metric cards, table/seat styling, and design tokens are reused.
 
-## Design reference and responsive behavior
+## Data and state behavior
 
-Based on the user-approved Canva prototype in `../docs/canva_admin_reference.html`
-and the four supplied screenshots in `../docs/`. Those files are visual references
-and are preserved unchanged. The production app does not execute their scripts.
+GET requests have a 15-second timeout and cancel on unmount/parameter change.
+Snapshots are keyed by resource ID, refresh version, and creation revision, so a
+previous class cannot flash or overwrite the selected class. Refresh is manual,
+with no polling or overlapping active GETs. Errors never display false zero data.
 
-- A fixed 244px navy sidebar (`#142446`), white header, and light workspace
-  (`#f6f8fc`) follow the prototype's proportions.
-- Blue (`#3867df`), ink (`#182744`), muted text (`#62718a`), and border
-  (`#e7edf5`) tokens are centralized. Held orange and confirmed green tokens
-  are used for the dashboard's seat categories, with darker accessible text colors.
-  Muted text has at least 4.65:1 contrast on the workspace, white cards, table
-  header, and legend backgrounds. Held text (`#a35c1b`) has at least 4.62:1 on
-  those surfaces and the held-icon background. Both meet 4.5:1 for normal text.
-- DM Sans body and Work Sans headings are self-hosted using Fontsource packages,
-  with system fallbacks. Lucide React supplies icons through normal React rendering.
-- Cards use 18px corners, a thin border, and a subtle shadow. Spacing follows a
-  shared 4px scale, with 36px desktop content gutters.
-- At 850px and below, navigation moves above the workspace with three labelled
-  links. At 600px and below, links stack, gutters narrow, and profile text hides.
-  Navigation labels remain visible. The mobile shell has no collapsed menu.
-- Semantic landmarks, a skip link, visible focus outlines, labelled navigation,
-  and reduced-motion support are included.
+Dashboard totals sum actual response fields, including backend-provided
+availability. Zero classes produce zero totals and an informative empty state.
+Search trims whitespace, matches class/shift names case-insensitively, and
+preserves the input while filtering. No matches and an empty database have
+separate states. All classes are shown in server order, without pagination.
 
-The header initials and profile text are static design placeholders. There is no
-login, session, notification workflow, or Logout control.
+Details fetch the selected UUID directly. Utilization is held plus confirmed,
+divided by capacity, with a zero-denominator guard. The displayed percentage is
+rounded; visual width and progressbar numeric semantics are clamped to 0-100.
 
-## Dashboard data and refresh behavior
+The creation form has exactly three required inputs: Class (Play, Nursery, KG,
+Class 1-10), Shift (Morning/Day), and Total Seats (integer 1-2,147,483,647, matching
+the backend). One helper generates `<Class> - <Shift> Shift`. No free-text name
+field is used. The form retains values on duplicate, validation, and network
+failures and prevents concurrent POSTs.
 
-The classes service makes only `GET /classes`, with `Accept: application/json`
-and no student identity header or request body. It expects the backend's camel-case
-JSON array of `id`, `name`, `totalSeats`, `heldSeats`, `confirmedSeats`, and
-`availableSeats`. HTTP failures, invalid JSON, malformed records, and network
-errors fail explicitly instead of being treated as empty data.
+Successful creation shows a polite confirmation, closes the modal, navigates to
+the list, clears an old search filter, and invalidates class resources. The list
+refetches, and returning to Dashboard loads fresh totals. The UI does not insert
+an optimistic or fabricated row.
 
-The custom hook is the view-model layer: it owns the initial load, loading/error
-state, Retry, and manual Refresh. Requests use AbortController, cancel on unmount,
-and time out after 15 seconds. Refresh is disabled while loading, requests do not
-overlap, and there is no polling. Use Refresh to retrieve current hold and
-confirmation totals. A refresh clears the old snapshot while retrieving new data;
-an error never displays authoritative-looking zero statistics.
+## Visual reference and responsive behavior
 
-A single persistent, polite live region sits outside the busy dashboard content.
-It is mounted empty before its first message is inserted, announces loading,
-success, empty results, and errors, and retains the same DOM node through state
-changes. Visual loading, empty, and retry panels do not add competing live
-regions. Ordinary rerenders with the same status do not repeat announcements.
+The unmodified Canva HTML and screenshots in `../docs/` guide the appearance.
+No Canva SDK, CDN styling script, demo records, or manual prototype event wiring
+is executed. F1's 244px navy sidebar, white header, light workspace, blue accent,
+self-hosted DM Sans/Work Sans fonts, and rounded cards are retained. Updated text
+and form colors meet normal-text AA contrast on their actual surfaces.
 
-The pure summary helper sums the actual API fields. Available seats are summed
-from `availableSeats`, not reconstructed from capacity. Occupied percentage is
-`round((confirmed + held) / total * 100)`, with zero capacity returning 0. The bar
-uses these same counts; if their sum exceeds capacity, only the segment widths
-are normalized to fit. Reported counts and the occupied percentage stay intact.
+Navigation moves above the workspace below 850px, with visible labels, then
+stacks below 600px. Cards use four, two, or one columns; tables scroll within
+keyboard-focusable regions and long names wrap. The modal fits the viewport and
+scrolls internally when necessary. Header profile text is a static design
+placeholder; there is no authentication, Logout, or notification workflow.
 
-A successful empty array displays zero metrics, a zero-capacity bar, and
-"No admission classes yet". All returned classes appear in the summary table,
-in backend order, without pagination. Long names wrap; the table scrolls within
-its own keyboard-focusable region on narrow screens. The metric grid has four
-columns at 1280px and above, two below that, and one at 600px and below.
+## Verification
 
-## Milestone boundary
-
-F2 includes only the dashboard. View all classes, View Details, and Create
-Admission Class navigate to the existing F3-F5 placeholders. The full class-list
-page, search/filtering, actual details screen, creation form/modal, and POST
-requests remain deferred. No fake class records or counts are shipped. Fixtures
-inside `.test.js` files exist only for isolated verification and are not imported
-by the application.
-
-For F5, the approved creation fields are Class dropdown (Play, Nursery, KG,
-Class 1-10), Shift (Morning/Day), and Total Seats. Do not restore the reference's
-free-text class-name input. Backend and database configuration remain out of scope.
+`npm test` covers API URLs/proxies, GET/POST contracts and failures, search,
+all class/shift names, form validation/limits, utilization, dashboard totals,
+announcements, and text contrast. Test fixtures are confined to test files and
+are never used as application fallback data. Browser verification additionally
+covers live API flows, dialog focus/history, cancellation/stale selection,
+errors, and 1440/900/768/375px layouts. Live POST verification creates persistent
+class records; their names and IDs are reported for review without deleting data.

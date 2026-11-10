@@ -37,3 +37,9 @@ for (const foreground of ['muted', 'held-ink']) {
 test('refresh hover text meets 4.5:1 on the soft blue hover background', () => {
   assert.ok(contrast(colors['primary-hover'], colors['primary-soft']) >= 4.5)
 })
+
+test('form errors and creation notices have normal-text AA contrast', () => {
+  assert.ok(contrast(colors.error, colors.surface) >= 4.5)
+  assert.ok(contrast(colors.error, colors['error-soft']) >= 4.5)
+  assert.ok(contrast(colors['confirmed-ink'], colors['confirmed-soft']) >= 4.5)
+})

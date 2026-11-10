@@ -28,6 +28,8 @@
   --color-profile-ink: #274ba4;
   --color-sidebar-border: rgb(255 255 255 / 10%);
   --color-focus: #83a8ff;
+  --color-error: #a73c39;
+  --color-error-soft: #fff4f3;
 
   --font-body: 'DM Sans Variable', 'Segoe UI', sans-serif;
   --font-heading: 'Work Sans Variable', 'Segoe UI', sans-serif;
