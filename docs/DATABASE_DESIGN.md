@@ -36,11 +36,24 @@ is covered by dropping AdmissionClasses in the migration's Down method. Keep it
 in mind when changing Name or renaming the table in future migrations.
 
 No time expression appears in the partial index. A HELD record remains protected
-even after ExpiresAt elapses until a later milestone explicitly changes its
-status. Expired and cancelled history may coexist with a new active application.
+even after ExpiresAt elapses until its status changes. M4 hold creation normalizes
+the requesting student's HELD rows with ExpiresAt <= the decision timestamp to
+EXPIRED inside the allocation transaction, before inserting a replacement. It
+preserves their IDs, timestamps, and history. Other students' elapsed HELD rows
+remain unchanged and do not count against capacity. Expired and cancelled history
+may coexist with a new active application; CONFIRMED records are never expired.
+
+Allocation uses a READ COMMITTED PostgreSQL transaction and parameterized
+`SELECT ... FOR UPDATE` on the target AdmissionClasses row. The decision timestamp
+is captured after lock acquisition, so subsequent statements see committed holds
+from earlier allocations. All allocations for the same class take this row lock
+before checking duplicates/capacity. Failure rolls back normalization and inserts;
+success commits before its HTTP response. Different classes have independent row
+locks. The partial unique index remains an additional duplicate safeguard, and
+the existing schema/migration is unchanged.
+
 Class-name trimming is handled by M3 class creation. Read APIs derive effective
-seat counts without updating history. Capacity enforcement, transaction/row-lock
-services, status transitions, and expiration workers remain deferred. No cached
-seat counters exist.
+seat counts without updating history. Confirmation, cancellation, and background
+expiration remain deferred. No cached seat counters exist.
 
 See [backend/README.md](../backend/README.md) for local commands and API behavior.

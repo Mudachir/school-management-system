@@ -25,6 +25,9 @@ public sealed class PostgresFixture : IAsyncLifetime
         await context.Database.MigrateAsync();
     }
 
+    public AppDbContext CreateContext() =>
+        new(options ?? throw new InvalidOperationException("PostgreSQL tests are not configured."));
+
     public async Task<AppDbContext> CreateTransactionalContextAsync()
     {
         var context = new AppDbContext(options ?? throw new InvalidOperationException("PostgreSQL tests are not configured."));
