@@ -1,0 +1,47 @@
+:root {
+  --color-navy: #142446;
+  --color-ink: #182744;
+  --color-muted: #687892;
+  --color-border: #e7edf5;
+  --color-primary: #3867df;
+  --color-primary-hover: #2956c7;
+  --color-held: #e6913b;
+  --color-confirmed: #239973;
+  --color-background: #f6f8fc;
+  --color-surface: #ffffff;
+  --color-primary-soft: #eaf0ff;
+  --color-nav-text: #c6d2e9;
+  --color-nav-active: #2c4270;
+  --color-nav-muted: #a9bde2;
+  --color-brand: #436bce;
+  --color-profile: #dfe8fc;
+  --color-profile-ink: #274ba4;
+  --color-sidebar-border: rgb(255 255 255 / 10%);
+  --color-focus: #83a8ff;
+
+  --font-body: 'DM Sans Variable', 'Segoe UI', sans-serif;
+  --font-heading: 'Work Sans Variable', 'Segoe UI', sans-serif;
+  --text-xs: 0.6875rem;
+  --text-sm: 0.8125rem;
+  --text-base: 0.9375rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.5rem;
+
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-7: 1.75rem;
+  --space-8: 2rem;
+  --space-9: 2.25rem;
+  --space-10: 2.5rem;
+
+  --sidebar-width: 244px;
+  --content-max-width: 1400px;
+  --radius-nav: 11px;
+  --radius-control: 12px;
+  --radius-card: 18px;
+  --shadow-card: 0 8px 28px rgb(27 48 85 / 4.5%);
+}
