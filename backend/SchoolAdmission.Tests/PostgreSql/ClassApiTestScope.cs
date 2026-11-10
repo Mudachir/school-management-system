@@ -38,6 +38,7 @@ internal sealed class ClassApiTestScope : IAsyncDisposable
         var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
             builder.ConfigureTestServices(services =>
             {
+                ApiTestHost.DisableExpirationWorker(services);
                 services.RemoveAll<AppDbContext>();
                 services.AddScoped(_ =>
                 {

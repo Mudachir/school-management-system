@@ -1,4 +1,4 @@
-# School Admission backend (M1–M5)
+# School Admission backend (M1–M6)
 
 The backend is a single ASP.NET Core Web API targeting .NET 10, with an xUnit
 integration test project. Future modules will live within the API project.
@@ -183,8 +183,8 @@ additional duplicate protection. All failure/conflict paths dispose the
 uncommitted transaction, rolling back expiry normalization and any insert and
 releasing the lock. No in-memory lock or seat counters are used.
 
-M5 confirmation, cancellation, and targeted hold reads follow the same class
-lock order, as described below. Background expiration remains later work.
+M5 lifecycle operations and the M6 expiration worker follow the same class-first
+lock order, as described below.
 
 ## M5 hold lifecycle APIs
 
@@ -279,8 +279,64 @@ ExpiresAt <= its captured UTC time. Class GET endpoints remain read-only.
   on the original hold timestamp.
 - Confirmation represents the workflow's verified-fee step. No actual payment
   verification or gateway is implemented.
-- M6 will handle background expiry persistence. No worker or scheduler exists
-  in M5.
+- M6 handles background expiry persistence. Request-time expiry checks remain
+  necessary because persistence is eventual and the database may be unavailable.
+
+## M6 automatic hold expiration
+
+`HoldExpirationWorker` is registered as an ASP.NET Core `BackgroundService` and
+starts automatically with the API, even when no HTTP requests arrive. Each cycle
+creates and asynchronously disposes a new DI scope, scoped `HoldExpirationSweep`,
+and `AppDbContext`. `TimeProvider.System` supplies UTC timestamps in normal use.
+No singleton captures a scoped context, and no startup migration is performed.
+
+Set the polling interval through standard ASP.NET Core configuration:
+
+```bash
+export HOLD_EXPIRATION_POLL_SECONDS=5
+```
+
+The default is 5 seconds. Values must be integers from 1 through 4294967 seconds,
+the largest whole-second interval supported by the .NET delay timer. Missing
+configuration uses the default; zero, negative, non-integer, overflowing, and
+unsupported timer intervals fail startup with feedback naming the setting.
+`HOLD_DURATION_SECONDS` still controls new-hold duration and is unchanged.
+
+The first sweep runs on worker startup. The configured delay occurs after each
+completed or failed cycle, so cycles do not overlap or spin on database errors.
+For each sweep:
+
+1. Discover at most 256 class IDs from the oldest elapsed HELD records using a
+   non-locking, no-tracking scalar query. The existing `(Status, ExpiresAt)` index
+   supports the status/time range and expiry ordering.
+2. Process at most 32 distinct classes, one READ COMMITTED transaction per class.
+   Acquire that class row using the existing parameterized `FOR UPDATE` helper.
+3. Capture a fresh UTC decision time after acquiring the lock. Update at most 256
+   elapsed HELD records for that class using one set-based `ExecuteUpdateAsync`.
+   Status and `ExpiresAt <= decisionUtc` are rechecked in the update predicate;
+   discovery can be stale. No hold rows are locked before the parent class row.
+4. Change only Status to EXPIRED and commit. Preserve all IDs, timestamps, student
+   numbers, and history. Future HELD, CONFIRMED, CANCELLED, and already EXPIRED
+   records are untouched. Remaining backlog is handled by later sweeps.
+
+The class-first critical section serializes with M4 reservations, M5 lifecycle
+writes, and other worker instances. Repeated sweeps are idempotent. Transactions
+are released before moving to another class. A cycle error may follow earlier
+classes' successful commits; the next cycle safely resumes from current state.
+
+Shutdown cancels timer waits and database operations. Disposing an uncommitted
+transaction rolls back its updates and releases locks. Failed cycles log an Error
+event containing exception type and PostgreSQL SQLSTATE when available, then
+retry with a new scope after the polling delay. Raw exception messages, student
+IDs, and connection strings are not included in worker diagnostics. Every failed
+cycle is logged, including persistent failures; check connection configuration,
+explicit migration setup, and database availability when these events recur.
+Database failure does not deliberately stop the API; `/health` remains liveness.
+
+Persisted EXPIRED status is eventual: polling, backlog, and lock waits affect its
+timing. All existing API expiry/capacity checks are retained, so an elapsed HELD
+record does not consume capacity even before a sweep persists its status. No
+redundant counters, new endpoints, schema changes, or external scheduler are used.
 
 ## Real PostgreSQL tests
 
@@ -365,6 +421,36 @@ confirm/cancel requests, confirm versus cancel, cancellation versus reservations
 late confirmation versus reapplication, and expiry-normalizing GET versus late
 confirmation. Lock-wait tests also alter the committed hold while a confirmation
 waits, proving that it rereads current state and captures time after the wait.
+
+Run the M6 tests with:
+
+```bash
+dotnet test SchoolAdmission.sln --no-build --filter 'FullyQualifiedName~HoldExpiration' --logger 'console;verbosity=detailed'
+```
+
+Existing API test hosts explicitly remove only the expiration hosted-service
+registration to preserve their fixtures' controlled history. M6 tests start the
+real DI-registered worker in separate API hosts and verify commits through fresh
+independent PostgreSQL reads. No HTTP request is made before proving automatic
+expiry. A controlled UTC `TimeProvider` supplements live PostgreSQL for exact
+boundaries; eventual assertions observe database state instead of relying on
+long sleeps.
+
+M6 uses the guarded dedicated test database and the non-parallel committed-hold
+collection. Before seeding, its tests require that database to contain no holds;
+they fail without starting a worker if unrelated/leftover holds exist. Cleanup
+still deletes only test-owned class UUIDs and their records. No volumes or
+databases are reset. These safeguards prevent a global worker from expiring other
+tests' data.
+
+Coverage includes no-request persistence, future/terminal status preservation,
+exact UTC boundary, bounded batches, repeated sweeps/restarts, current-state
+rechecks after lock waits, fresh decision time, and cancellation during timer/
+lock waits and after an update but before commit. An actual closed-port connection
+failure tests logging, liveness, new context creation, and recovery on later
+sweeps. Contention tests observe one/two live workers and simultaneous HTTP
+reservation/confirmation/cancellation requests waiting in PostgreSQL, then verify
+committed statuses, retained history, exact expiration counts, and capacity.
 
 The PostgreSQL suite checks valid persistence, all active-status duplicate pairs,
 expired/cancelled history, malformed birth-registration numbers, seat counts,

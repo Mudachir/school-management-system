@@ -39,8 +39,9 @@ No time expression appears in the partial index. A HELD record remains protected
 even after ExpiresAt elapses until its status changes. M4 hold creation normalizes
 the requesting student's HELD rows with ExpiresAt <= the decision timestamp to
 EXPIRED inside the allocation transaction, before inserting a replacement. It
-preserves their IDs, timestamps, and history. Other students' elapsed HELD rows
-remain unchanged and do not count against capacity. Expired and cancelled history
+preserves their IDs, timestamps, and history. That request-time update does not
+change other students' stale rows; M6 persists their expiry asynchronously.
+Elapsed HELD rows do not count against capacity. Expired and cancelled history
 may coexist with a new active application; CONFIRMED records are never expired.
 
 Allocation uses a READ COMMITTED PostgreSQL transaction and parameterized
@@ -81,7 +82,35 @@ Lifecycle responses follow commit, including deliberately persisted expiry on
 409. Other failures roll back. Confirmation preserves occupied capacity;
 cancellation releases it. The unchanged partial unique index permits a new
 active application after a historical row becomes EXPIRED or CANCELLED.
-Background expiry, actual payment verification, and stronger authentication
-remain outside M5. See the backend README for the prototype assumptions.
+Actual payment verification and stronger authentication remain outside the
+prototype. See the backend README for the documented assumptions.
+
+## M6 automatic expiry persistence
+
+The DI-hosted background worker creates a new scoped context for each cycle.
+It discovers at most 256 candidate class IDs from elapsed HELD rows without locks
+or tracking, processes at most 32 distinct classes, and updates at most 256 rows
+per class. The existing Status/ExpiresAt index supports the candidate range and
+ordering. Backlog is drained over subsequent polling cycles.
+
+Each class uses its own READ COMMITTED transaction and the shared class-row
+`FOR UPDATE` helper before any hold update. The worker captures fresh UTC time
+after acquiring the class lock. Its bounded set-based UPDATE rechecks ClassId,
+Status = HELD, and ExpiresAt <= decisionUtc, even if candidate discovery was
+stale. Only Status changes to EXPIRED; timestamps and history are retained.
+CONFIRMED, CANCELLED, already EXPIRED, and future HELD records are never expired.
+
+This lock order matches reservation and lifecycle operations. Multiple workers
+serialize for the same class and reread predicates before writing. Each class's
+transaction commits before its lock is released; cancellation/failure rolls back
+the uncommitted class update. Earlier committed classes remain valid if a later
+class fails, and repeated processing is idempotent. No process-local lock is used.
+
+The default delay after each cycle is 5 seconds, configured with
+HOLD_EXPIRATION_POLL_SECONDS and validated at startup. Errors are logged with safe
+metadata and retried in a fresh scope. Shutdown cancels waits and SQL operations.
+No startup migration, schema modification, stored seat counter, deletion, or
+expiration timestamp mutation is introduced. Request-time expiry checks remain
+in place because persisted status is eventually consistent with wall-clock time.
 
 See [backend/README.md](../backend/README.md) for local commands and API behavior.

@@ -66,6 +66,7 @@ internal sealed class HoldApiTestScope : IAsyncDisposable
                 configuration.AddInMemoryCollection(settings);
             }).ConfigureTestServices(services =>
             {
+                ApiTestHost.DisableExpirationWorker(services);
                 if (interceptor is not null)
                     services.ConfigureDbContext<AppDbContext>(options => options.AddInterceptors(interceptor));
             }));
