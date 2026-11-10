@@ -2,7 +2,8 @@
 
 Admin milestones F1-F5 provide the shared shell, API-connected Dashboard,
 searchable Admission Classes page, Class Details, and one shared creation modal.
-The parent portal and admission/hold operations are outside this frontend scope.
+Milestones F6-F8 add a separate Parent Portal at `/parent`: student selection,
+class browsing, seat holds, confirmation, cancellation and application history.
 
 ## Setup and local servers
 
@@ -70,6 +71,18 @@ there are no sample records or mock fallbacks in the application.
 | `/admin/classes/new` | Redirects to `/admin/classes?create=class` |
 | Any admin view with `?create=class` | Shared Create Admission Class modal |
 | Other paths | Page-not-found state |
+
+Parent routes:
+
+| URL | Content |
+| --- | --- |
+| `/parent` | Welcome and Student Birth Registration Number selection |
+| `/parent/classes` | Public class browsing with class/shift filters |
+| `/parent/classes/:classId` | Public capacity details and Hold My Seat |
+| `/parent/holds/:holdId` | Owned reservation, server status and expiry countdown |
+| `/parent/holds/:holdId/review` | Review and confirm admission |
+| `/parent/holds/:holdId/success` | Server-verified confirmation outcome |
+| `/parent/applications` | Active student's history, details and cancellation |
 
 Dashboard, list, and sidebar actions open the same modal on the current page.
 The current underlying sidebar item stays active. Opening adds a history entry;
@@ -171,3 +184,77 @@ are never used as application fallback data. Browser verification additionally
 covers live API flows, dialog focus/history, cancellation/stale selection,
 errors, and 1440/900/768/375px layouts. Live POST verification creates persistent
 class records; their names and IDs are reported for review without deleting data.
+
+## Parent Portal architecture and behavior
+
+`features/parent/` contains thin `pages/`, reusable presentation `components/`,
+`hooks/`, `services/`, `helpers/`, scoped `parent.css`, and two small contexts:
+
+- `StudentProvider` stores the exact 17-digit string in tab-scoped `sessionStorage`.
+  Leading zeroes are preserved; invalid or unavailable storage is handled safely.
+  Changing students synchronously aborts registered requests, invalidates the old
+  session and remounts student-scoped state. No localStorage or student logging.
+- `ParentDataProvider` shares and deduplicates `/me/holds` reads. Its eligibility
+  state fails closed while loading or on errors. A separate class-data revision
+  invalidates the reused F2/F3 class hooks after parent mutations.
+- `holdService` uses the existing `/api` client; `admissionService` checks current
+  applications and ownership before mutations. `useStudentAction` prevents double
+  submission, handles timeout/unmount/student changes and refreshes server data.
+- `useOwnedHold` checks the selected student's history before requesting public
+  hold details. `useHoldCountdown` derives time from the original `expiresAt`,
+  stops timers on unmount, and reconciles elapsed holds with the backend.
+
+Rejected actions invalidate owned-reservation snapshots as well as class data.
+The reservation refetches through the ownership check and public hold endpoint;
+failed reconciliation shows an error instead of retaining an actionable HELD
+snapshot. Operation state is scoped to the selected student and class/hold ID,
+so navigation aborts requests and discards obsolete completion callbacks.
+
+At countdown zero, a reservation view makes at most five sequential status
+checks (immediately, then after 2, 5, 10 and 20 seconds from each completed
+check). Checks stop on terminal status, errors, navigation or student changes.
+If the server still reports HELD after the budget, Refresh status remains
+available. The original `expiresAt` is never rewritten or restarted.
+
+The Node test suite also runs isolated React lifecycle regressions in headless
+Chrome/Chromium (or Edge). It detects common installed browser paths; set
+`PARENT_TEST_CHROME` to the executable path when needed. These tests launch their
+own Vite server and temporary browser profile and intercept every `/api` request,
+so they never create backend records. They are explicitly skipped if no supported
+browser is installed. Live API verification is performed separately.
+
+Parent API contracts used (no backend changes):
+
+| Endpoint | Request | Expected response |
+| --- | --- | --- |
+| `GET /classes`, `GET /classes/:id` | No student header | Class summaries |
+| `GET /me/holds` | `X-Student-Id` | Current student's application array |
+| `POST /classes/:id/holds` | `X-Student-Id`, no body | 201, full hold UUID and actual expiry |
+| `GET /holds/:id` | No student header; UI first checks ownership | Hold status and expiry |
+| `POST /holds/:id/confirm` | `X-Student-Id`, no body | 200, confirmed hold |
+| `DELETE /holds/:id` | `X-Student-Id`, no body | 204, empty body (never parsed as JSON) |
+
+Browsing works without a number. Holding requires a valid student, available
+capacity and verified application status. Immediately before hold creation or
+confirmation, a fresh `/me/holds` check blocks a second admission when any other
+application is CONFIRMED, names that class and links to My Applications. HELD,
+EXPIRED and CANCELLED history does not impose that global restriction. Failed
+verification prevents mutation; retry is explicit. This is a frontend UX guard,
+not a backend invariant. Independent tabs or clients can race after verification;
+student identification is not authentication. The countdown uses the device
+clock, while backend status and mutation responses remain authoritative.
+
+Hold/review/success/application screens display the full student number and Hold
+ID. Success URLs recheck server state and cannot manufacture a confirmation.
+The backend permits cancellation of HELD and CONFIRMED applications; the native
+confirmation dialog starts on Keep application, traps keyboard focus, supports
+Escape, and announces errors outside busy controls. Status live regions remain
+outside busy content; countdown seconds are not repeatedly announced.
+
+The parent shell retains the navy/white/blue Canva palette and self-hosted fonts.
+Class cards use three columns on desktop, two on tablet and one on mobile. The
+sidebar moves above content at 768px; filters and summary rows stack on narrow
+screens. Checks cover 1440/900/768/375px, keyboard interaction, student isolation,
+late responses, API failures and real create/confirm/cancel flows. Tests include
+leading-zero storage, filters, confirmed/held/expired/cancelled eligibility,
+loading/errors, ownership, cancellation, contracts and countdown calculations.

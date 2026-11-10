@@ -1,0 +1,119 @@
+.parent-portal { min-height: 100vh; font-size: var(--text-base); }
+.parent-sidebar { position: fixed; inset: 0 auto 0 0; display: flex; flex-direction: column; width: var(--sidebar-width); padding: 32px 20px; background: var(--color-navy); color: white; }
+.parent-brand { display: flex; align-items: center; gap: 12px; padding: 0 4px 36px; font-size: 14px; font-weight: 700; }
+.parent-brand > span { display: grid; place-items: center; width: 40px; height: 42px; border-radius: 11px; background: var(--color-primary); font-size: 21px; }
+.parent-brand strong { display: block; margin-top: 3px; color: var(--color-nav-muted); font-size: 11px; font-weight: 500; }
+.parent-sidebar nav { display: grid; gap: 8px; }
+.parent-sidebar nav a { padding: 13px 16px; border-radius: var(--radius-nav); color: var(--color-nav-text); font-size: 13px; font-weight: 500; }
+.parent-sidebar nav a.active { background: var(--color-nav-active); color: white; }
+.parent-sidebar nav a:hover { background: var(--color-nav-active); }
+.parent-footer { margin-top: auto; padding: 24px 8px 0; color: var(--color-nav-muted); font-size: 12px; line-height: 1.8; }
+.parent-workspace { margin-left: var(--sidebar-width); }
+.parent-header { min-height: 91px; display: flex; justify-content: space-between; align-items: center; gap: 18px; padding: 20px 36px; background: white; border-bottom: 1px solid var(--color-border); }
+.parent-header h1 { font-size: 17px; }
+.parent-header p { margin-top: 4px; color: var(--color-muted); font-size: 12px; }
+.parent-header-student { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
+.parent-student-pill { border-radius: 20px; padding: 8px 12px; font-size: 11px; color: var(--color-available-ink); background: var(--color-primary-soft); }
+.parent-portal button.text-link { border: 0; background: transparent; padding: 0; }
+.parent-content { max-width: 1400px; padding: 36px; margin: auto; }
+.parent-intro { margin-bottom: 28px; }
+.parent-intro h2 { margin-top: 9px; font-size: clamp(24px, 2.3vw, 31px); letter-spacing: -0.7px; }
+.parent-intro > p:last-child { margin-top: 12px; max-width: 65ch; color: var(--color-muted); font-size: 14px; line-height: 1.8; }
+.parent-panel { padding: 28px; }
+.parent-panel h3 { font-size: 17px; }
+.parent-panel > p { margin-top: 12px; color: var(--color-muted); font-size: 14px; line-height: 1.8; }
+.parent-welcome-grid { display: grid; grid-template-columns: 1.7fr 1fr; gap: 24px; align-items: start; }
+.parent-welcome-grid .button { margin-top: 22px; }
+.parent-portal label { display: grid; gap: 9px; font-size: 12px; font-weight: 600; }
+.parent-portal input, .parent-portal select { width: 100%; min-height: 46px; border: 1px solid #ccd6e6; border-radius: 9px; padding: 10px 12px; color: var(--color-ink); background: white; }
+.parent-portal input::placeholder { color: var(--color-muted); }
+.parent-portal input[aria-invalid=true] { border-color: var(--color-error); }
+.parent-student-form { margin-top: 24px; }
+.parent-student-input-row { display: flex; gap: 12px; margin-top: 8px; }
+.parent-student-input-row input { min-width: 0; }
+.parent-student-input-row .button { margin-top: 0; }
+.parent-active-student { padding: 14px; border-radius: 9px; background: var(--color-primary-soft); overflow-wrap: anywhere; }
+.parent-student-form small { display: block; color: var(--color-muted); margin-top: 9px; font-size: 12px; }
+.parent-form-error, .parent-panel > .parent-form-error { color: var(--color-error); font-size: 13px; margin-top: 10px; }
+.parent-student-banner { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; justify-content: space-between; padding: 19px 24px; margin-bottom: 24px; }
+.parent-student-banner p { color: var(--color-muted); font-size: 12px; }
+.parent-student-banner strong { color: var(--color-ink); display: block; font-size: 14px; margin-top: 4px; overflow-wrap: anywhere; }
+.parent-welcome-grid .parent-student-banner { margin: 24px 0 0; background: var(--color-background); box-shadow: none; }
+.parent-aside-icon { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 12px; background: var(--color-primary-soft); color: var(--color-primary); margin-bottom: 20px; }
+.parent-filters { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; padding: 22px 24px; }
+.parent-options-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 22px 0 12px; }
+.parent-options-heading h3 { font-size: 17px; }
+.parent-class-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
+.parent-class-card { padding: 24px; min-width: 0; }
+.parent-class-card h3 { font-size: 18px; }
+.parent-class-card header { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.parent-shift, .parent-status { display: inline-flex; align-items: center; border-radius: 6px; padding: 5px 9px; font-size: 11px; font-weight: 600; background: var(--color-primary-soft); color: var(--color-available-ink); }
+.parent-class-counts { margin: 23px 0 12px; font-size: 12px; color: var(--color-muted); }
+.parent-available { padding-bottom: 10px; color: var(--color-confirmed-ink); font-size: 13px; font-weight: 600; }
+.parent-available.is-full { color: var(--color-error); }
+.parent-class-card .button { width: 100%; margin-top: 10px; }
+.parent-portal .parent-class-card .button-secondary, .parent-welcome-grid aside .button { width: 100%; background: var(--color-primary-soft); color: var(--color-available-ink); border: 0; }
+.parent-portal .button-secondary { background: white; color: var(--color-ink); border: 1px solid #ccd6e6; }
+.parent-portal .button:disabled { cursor: not-allowed; background: #e8edf5; color: #586780; border-color: transparent; box-shadow: none; }
+.parent-reservation-panel { max-width: 830px; }
+.parent-capacity { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 24px 0; }
+.parent-capacity div { background: var(--color-background); border: 1px solid var(--color-border); border-radius: 11px; padding: 19px 14px; }
+.parent-capacity dt { color: var(--color-muted); font-size: 12px; }
+.parent-capacity dd { font-family: var(--font-heading); font-size: 25px; font-weight: 600; margin: 9px 0 0; }
+.parent-notice { background: var(--color-background); border-radius: 10px; border: 1px solid var(--color-border); padding: 15px 18px; color: var(--color-muted); font-size: 13px; margin: 20px 0; line-height: 1.8; }
+.parent-notice .text-link { margin-left: 10px; }
+.parent-summary { display: grid; margin: 22px 0; }
+.parent-summary div { display: grid; grid-template-columns: 210px 1fr; gap: 16px; padding: 16px 0; border-bottom: 1px solid var(--color-border); font-size: 13px; }
+.parent-summary dt { color: var(--color-muted); }
+.parent-summary dd { margin: 0; font-weight: 500; overflow-wrap: anywhere; text-align: right; }
+.parent-status-held { background: var(--color-held-soft); color: #985316; }
+.parent-status-confirmed { background: var(--color-confirmed-soft); color: #146749; }
+.parent-status-expired, .parent-status-cancelled { background: #edf0f5; color: #586780; }
+.parent-countdown { display: flex; align-items: center; flex-wrap: wrap; justify-content: space-between; gap: 10px; border-radius: 10px; padding: 18px 20px; background: var(--color-held-soft); color: #985316; margin: 24px 0; font-size: 13px; }
+.parent-countdown strong { font-size: 23px; font-variant-numeric: tabular-nums; }
+.parent-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 24px; }
+.parent-application-list { display: grid; gap: 18px; }
+.parent-application-card { padding: 24px; }
+.parent-application-card header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.parent-application-card h3 { font-size: 17px; }
+.parent-application-card .parent-summary { margin: 10px 0; }
+.parent-success { max-width: 800px; margin: 26px auto; text-align: center; }
+.parent-success-icon { display: grid; place-items: center; width: 62px; height: 62px; margin: 0 auto 23px; border-radius: 50%; color: #146749; background: var(--color-confirmed-soft); }
+.parent-success h2 { font-size: 27px; }
+.parent-success .parent-summary { text-align: left; }
+.parent-success .parent-actions { justify-content: center; }
+.parent-dialog { width: min(460px, calc(100% - 32px)); padding: 28px; color: var(--color-ink); }
+.parent-dialog::backdrop { background: rgb(20 36 70 / 45%); }
+.parent-dialog p { margin-top: 14px; color: var(--color-muted); font-size: 14px; }
+.parent-dialog .parent-actions { justify-content: flex-end; }
+@media (max-width: 1100px) {
+  .parent-sidebar { width: 210px; padding-inline: 16px; }
+  .parent-workspace { margin-left: 210px; }
+  .parent-content { padding: 28px; }
+  .parent-header { padding-inline: 28px; }
+  .parent-class-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .parent-welcome-grid { grid-template-columns: 1fr; }
+  .parent-capacity { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 768px) {
+  .parent-sidebar { position: static; width: auto; padding: 18px 20px; }
+  .parent-brand { padding-bottom: 16px; }
+  .parent-sidebar nav { display: flex; flex-wrap: wrap; gap: 6px; }
+  .parent-sidebar nav a { padding: 12px; }
+  .parent-footer { display: none; }
+  .parent-workspace { margin-left: 0; }
+  .parent-header { padding: 19px 22px; flex-wrap: wrap; }
+  .parent-content { padding: 26px 22px; }
+  .parent-summary div { grid-template-columns: 1fr; gap: 6px; }
+  .parent-summary dd { text-align: left; }
+}
+@media (max-width: 520px) {
+  .parent-class-grid, .parent-filters { grid-template-columns: 1fr; }
+  .parent-panel, .parent-class-card, .parent-application-card { padding: 22px; }
+  .parent-content { padding-inline: 16px; }
+  .parent-capacity { gap: 9px; }
+  .parent-capacity div { padding: 16px 12px; }
+  .parent-application-card header { flex-wrap: wrap; }
+  .parent-actions > .button { flex: 1 1 auto; }
+  .parent-student-input-row { flex-wrap: wrap; }
+}
