@@ -1,0 +1,15 @@
+# .NET build output
+**/bin/
+**/obj/
+
+# IDE settings and local secrets
+.vs/
+.idea/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+**/secrets.json
+.env
+.env.*
+!.env.example
