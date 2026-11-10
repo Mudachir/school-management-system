@@ -1,8 +1,9 @@
 import { createBrowserRouter, Navigate, RouterProvider } from 'react-router-dom'
 import AdminLayout from './components/admin/AdminLayout.jsx'
-import MilestonePlaceholder from './pages/MilestonePlaceholder.jsx'
 import NotFound from './pages/NotFound.jsx'
 import DashboardPage from './features/dashboard/DashboardPage.jsx'
+import ClassesPage from './features/classes/pages/ClassesPage.jsx'
+import ClassDetailsPage from './features/classes/pages/ClassDetailsPage.jsx'
 
 const router = createBrowserRouter([
   {
@@ -17,36 +18,17 @@ const router = createBrowserRouter([
       {
         path: '/admin/classes',
         handle: { title: 'Admission Classes' },
-        element: (
-          <MilestonePlaceholder
-            title="Admission Classes"
-            milestone="F3"
-            description="Class listings and search will be available here in a later milestone."
-          />
-        ),
+        element: <ClassesPage />,
       },
       {
         path: '/admin/classes/new',
         handle: { title: 'Create Class' },
-        element: (
-          <MilestonePlaceholder
-            title="Create Admission Class"
-            milestone="F5"
-            description="Class creation will be available here in a later milestone."
-          />
-        ),
+        element: <Navigate to="/admin/classes?create=class" replace />,
       },
       {
         path: '/admin/classes/:classId',
         handle: { title: 'Class Details' },
-        element: (
-          <MilestonePlaceholder
-            title="Class Details"
-            milestone="F4"
-            description="Individual class information will be available here in a later milestone."
-            backToClasses
-          />
-        ),
+        element: <ClassDetailsPage />,
       },
       { path: '*', handle: { title: 'Page not found' }, element: <NotFound /> },
     ],

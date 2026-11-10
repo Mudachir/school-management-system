@@ -1,7 +1,9 @@
 import { GraduationCap, Layers3, LayoutDashboard, SquarePlus } from 'lucide-react'
 import { NavLink, useMatch } from 'react-router-dom'
+import { useClassManagement } from '../../features/classes/hooks/useClassManagement.js'
 
 export default function AdminSidebar() {
+  const { openCreate, isOpen } = useClassManagement()
   const isCreateRoute = Boolean(useMatch('/admin/classes/new'))
   const isClassDetailsRoute = Boolean(useMatch('/admin/classes/:classId')) && !isCreateRoute
 
@@ -24,10 +26,10 @@ export default function AdminSidebar() {
           <Layers3 aria-hidden="true" />
           <span>Admission Classes</span>
         </NavLink>
-        <NavLink to="/admin/classes/new" end className="sidebar-link">
+        <button type="button" onClick={openCreate} className="sidebar-link sidebar-create" aria-haspopup="dialog" aria-expanded={isOpen}>
           <SquarePlus aria-hidden="true" />
           <span>Create Class</span>
-        </NavLink>
+        </button>
       </nav>
 
       <p className="sidebar-footer">ADMISSIONS WORKSPACE</p>

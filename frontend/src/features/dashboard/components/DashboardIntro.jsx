@@ -1,5 +1,5 @@
-import { Plus, RefreshCw } from 'lucide-react'
-import { Link } from 'react-router-dom'
+import { RefreshCw } from 'lucide-react'
+import CreateClassButton from '../../classes/components/CreateClassButton.jsx'
 
 export default function DashboardIntro({ onRefresh, isLoading }) {
   return (
@@ -13,9 +13,7 @@ export default function DashboardIntro({ onRefresh, isLoading }) {
         <button type="button" className="button dashboard-refresh" onClick={onRefresh} disabled={isLoading}>
           <RefreshCw size={16} aria-hidden="true" /> Refresh
         </button>
-        <Link className="button button-primary dashboard-create" to="/admin/classes/new">
-          <Plus size={16} aria-hidden="true" /> Create Admission Class
-        </Link>
+        <CreateClassButton className="dashboard-create" />
       </div>
     </div>
   )
