@@ -2,6 +2,7 @@ import { createBrowserRouter, Navigate, RouterProvider } from 'react-router-dom'
 import AdminLayout from './components/admin/AdminLayout.jsx'
 import MilestonePlaceholder from './pages/MilestonePlaceholder.jsx'
 import NotFound from './pages/NotFound.jsx'
+import DashboardPage from './features/dashboard/DashboardPage.jsx'
 
 const router = createBrowserRouter([
   {
@@ -11,13 +12,7 @@ const router = createBrowserRouter([
       {
         path: '/admin',
         handle: { title: 'Dashboard' },
-        element: (
-          <MilestonePlaceholder
-            title="Dashboard overview"
-            milestone="F2"
-            description="The admission overview will be available here in the next milestone."
-          />
-        ),
+        element: <DashboardPage />,
       },
       {
         path: '/admin/classes',
