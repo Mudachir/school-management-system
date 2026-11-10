@@ -1,4 +1,4 @@
-# School Admission backend (M1–M3)
+# School Admission backend (M1–M4)
 
 The backend is a single ASP.NET Core Web API targeting .NET 10, with an xUnit
 integration test project. Future modules will live within the API project.
@@ -28,8 +28,8 @@ Configuration uses standard ASP.NET Core providers, including environment variab
 
 - `ASPNETCORE_URLS` sets the listening address; no port is hard-coded.
 - `HOLD_DURATION_SECONDS` defaults to `600` when absent. Startup fails if the value
-  cannot be parsed as a positive 32-bit integer. This only prepares configuration;
-  no seat hold behavior is implemented.
+  cannot be parsed as a positive 32-bit integer. New seat holds expire this many
+  seconds after their server UTC decision timestamp.
 - `ConnectionStrings__DefaultConnection` configures `AppDbContext`. Its committed
   value remains empty. A missing value only fails when a context is requested;
   `/health` stays a liveness check and does not test database readiness.
@@ -124,9 +124,68 @@ Each GET captures one UTC time and executes one no-tracking, server-side aggrega
 query. HELD rows count only when `ExpiresAt > now`; CONFIRMED rows always count.
 EXPIRED, CANCELLED, and stale HELD rows do not consume seats. Available seats are
 `max(0, totalSeats - heldSeats - confirmedSeats)`. Raw held/confirmed counts remain
-visible if seeded data exceeds capacity. GET never changes statuses. No cached
-counters, reservation endpoints, capacity enforcement, locking services, or
-expiration worker are implemented in M3; those remain later work.
+visible if seeded data exceeds capacity. GET never changes statuses. M4 hold
+creation enforces capacity as described below; no cached counters are stored.
+
+## M4 seat hold creation
+
+After creating a class, use its UUID to request a hold. No JSON body is required:
+
+```bash
+curl -i -X POST http://localhost:8080/classes/019a69d3-1c00-7000-8000-000000000001/holds \
+  -H 'X-Student-Id: 20152691234567890'
+```
+
+Returns `201 Created` after the database transaction commits, with JSON such as:
+
+```json
+{
+  "holdId":"019a69d3-1c00-7000-8000-000000000002",
+  "classId":"019a69d3-1c00-7000-8000-000000000001",
+  "studentId":"20152691234567890",
+  "status":"HELD",
+  "expiresAt":"2026-11-10T14:10:00Z"
+}
+```
+
+`X-Student-Id` must be a single header value containing exactly 17 ASCII digits.
+It is stored directly as a string, preserving leading zeroes. Missing, blank,
+non-digit, Unicode-digit, whitespace-padded, short, long, and multiple values
+return `400` with a validation problem. A malformed class UUID returns `400`;
+a well-formed UUID without a class returns `404`. Full classes and duplicate
+active student/class applications return `409` with a useful ProblemDetails
+title. A live HELD or any CONFIRMED row blocks duplicates; requests never extend
+existing holds or overwrite confirmed admissions. Only `23505` for the known
+active-application unique index is mapped to a duplicate conflict; unrelated
+database errors retain normal error handling.
+
+The allocation critical section uses PostgreSQL, so it also protects requests
+handled by separate API instances:
+
+1. Begin an explicit READ COMMITTED transaction.
+2. Execute parameterized `SELECT * FROM "AdmissionClasses" WHERE "Id" = @id FOR UPDATE`.
+   Materialize this targeted query directly to avoid EF composition over the lock SQL.
+3. After acquiring the class-row lock, capture one fresh `DateTime.UtcNow`.
+4. Set the requesting student's elapsed HELD rows (`ExpiresAt <= decisionUtc`) to
+   EXPIRED with an immediate database update in this transaction. This frees the
+   partial unique index before a replacement insert, preserving the history rows.
+5. Check live duplicates and count effective HELD plus CONFIRMED rows while the
+   class lock is held. Other students' stale HELD rows are ignored for capacity
+   without changing their status. EXPIRED and CANCELLED rows do not count.
+6. If capacity remains, insert HELD with CreatedAt equal to decisionUtc and
+   ExpiresAt equal to decisionUtc plus the validated duration, then commit before
+   returning 201. ExpiresAt is stored as timestamptz and returned in UTC.
+
+Requests for the same class serialize at the row lock. In READ COMMITTED, hold
+queries after that lock see the preceding winner's committed insert. Different
+class rows can be locked independently. The existing partial unique index remains
+additional duplicate protection. All failure/conflict paths dispose the
+uncommitted transaction, rolling back expiry normalization and any insert and
+releasing the lock. No in-memory lock or seat counters are used.
+
+Confirmation, cancellation, hold reads, My Holds, and background expiration remain
+later work. Any future capacity-changing operations must follow the same class
+lock order.
 
 ## Real PostgreSQL tests
 
@@ -143,11 +202,11 @@ dotnet test SchoolAdmission.sln --no-build
 ```
 
 Tests only accept the exact database name `school_admission_m2_tests`. They apply
-the checked-in migration to that dedicated database and run each test's writes
-inside a transaction that rolls back on disposal. No `EnsureDeleted`, database
-drop, SQLite, or EF InMemory provider is used. Use this database exclusively for
-tests: its schema persists, but test records do not. If a connection is supplied
-and PostgreSQL is unreachable, tests fail instead of silently skipping.
+the checked-in migration to that dedicated database. M2/M3 tests use rollback
+transactions; M4 tests use real commits and scoped cleanup as described below.
+No `EnsureDeleted`, database drop, SQLite, or EF InMemory provider is used. Use
+this database exclusively for tests. If a connection is supplied and PostgreSQL
+is unreachable, tests fail instead of silently skipping.
 
 The M3 HTTP tests use `WebApplicationFactory<Program>` and the existing guarded
 PostgreSQL fixture. Each test's HTTP request contexts share its PostgreSQL
@@ -167,6 +226,32 @@ These tests cover creation/persistence/Location, name and seat validation,
 case-insensitive conflicts, ordered/empty lists, UUID errors, effective counts
 across multiple classes, stale HELD rows, read-only behavior, and over-capacity
 display. Query interception verifies one database read per GET.
+
+Run only M4 HTTP tests with:
+
+```bash
+dotnet test SchoolAdmission.sln --no-build --filter 'FullyQualifiedName~HoldEndpointsTests' --logger 'console;verbosity=detailed'
+```
+
+M4 uses the same fixture/database-name safety guard, independent physical
+PostgreSQL connections, production API DI, committed seed rows and HTTP writes,
+and fresh connections to verify committed state. Each test creates unique class
+UUIDs and deletes only its own holds/classes on disposal, child rows first. No
+outer rollback transaction hides writes from competing HTTP requests. The M4
+collection runs separately from other test collections so M3 empty-list tests
+cannot interfere with committed test records; requests within each contention
+test run concurrently across two independent API hosts.
+
+Contention tests use a real start barrier, hold the target row with a separate
+PostgreSQL transaction, then observe every competing request waiting in
+`pg_stat_activity` before releasing the blocker. Explicit deadlines bound waits.
+The cases cover 24 students/1 seat, 40 students/5 seats, 24 students/5 seats with
+2 confirmed admissions, and 24 same-student requests with/without stale history.
+They assert exact 201/409 counts and committed occupancy, not just responses. A
+separate test proves another class can commit while the first class is locked,
+and verifies the waiting request's decision timestamp is after lock release.
+Tests also cover headers, TTL/default options binding, full/duplicate conflicts,
+history preservation, stale reapplication, and rollback of normalization on 409.
 
 The PostgreSQL suite checks valid persistence, all active-status duplicate pairs,
 expired/cancelled history, malformed birth-registration numbers, seat counts,
