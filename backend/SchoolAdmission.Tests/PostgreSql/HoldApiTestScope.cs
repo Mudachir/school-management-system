@@ -1,8 +1,11 @@
 using System.Globalization;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 using SchoolAdmission.Api.Data;
 using SchoolAdmission.Api.Domain;
@@ -43,7 +46,7 @@ internal sealed class HoldApiTestScope : IAsyncDisposable
     public HttpClient Client { get; }
     public AppDbContext CreateContext() => new(options);
 
-    public HttpClient CreateIndependentClient()
+    public HttpClient CreateIndependentClient(DbCommandInterceptor? interceptor = null)
     {
         // Exercise production DI and options binding in independent API hosts.
         var settings = new Dictionary<string, string?>
@@ -61,6 +64,10 @@ internal sealed class HoldApiTestScope : IAsyncDisposable
                 // the real options default; a present null would bind int to zero.
                 configuration.Sources.Clear();
                 configuration.AddInMemoryCollection(settings);
+            }).ConfigureTestServices(services =>
+            {
+                if (interceptor is not null)
+                    services.ConfigureDbContext<AppDbContext>(options => options.AddInterceptors(interceptor));
             }));
         try
         {

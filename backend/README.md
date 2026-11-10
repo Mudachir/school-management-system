@@ -1,4 +1,4 @@
-# School Admission backend (M1–M4)
+# School Admission backend (M1–M5)
 
 The backend is a single ASP.NET Core Web API targeting .NET 10, with an xUnit
 integration test project. Future modules will live within the API project.
@@ -183,9 +183,104 @@ additional duplicate protection. All failure/conflict paths dispose the
 uncommitted transaction, rolling back expiry normalization and any insert and
 releasing the lock. No in-memory lock or seat counters are used.
 
-Confirmation, cancellation, hold reads, My Holds, and background expiration remain
-later work. Any future capacity-changing operations must follow the same class
-lock order.
+M5 confirmation, cancellation, and targeted hold reads follow the same class
+lock order, as described below. Background expiration remains later work.
+
+## M5 hold lifecycle APIs
+
+Use the UUID returned by hold creation. All examples below use an illustrative ID.
+
+```bash
+# Public lookup: no X-Student-Id header is required.
+curl -i http://localhost:8080/holds/019a69d3-1c00-7000-8000-000000000002
+```
+
+Returns `200` with exactly these fields; it does not disclose the student ID:
+
+```json
+{"holdId":"019a69d3-1c00-7000-8000-000000000002","classId":"019a69d3-1c00-7000-8000-000000000001","status":"HELD","expiresAt":"2026-11-10T14:10:00Z"}
+```
+
+```bash
+curl -i -X POST http://localhost:8080/holds/019a69d3-1c00-7000-8000-000000000002/confirm \
+  -H 'X-Student-Id: 20152691234567890'
+```
+
+An owner confirming a live HELD admission receives `200`:
+
+```json
+{"holdId":"019a69d3-1c00-7000-8000-000000000002","status":"CONFIRMED"}
+```
+
+Owner retries of CONFIRMED records return the same response, including when the
+original expiry timestamp has elapsed. ConfirmedAt is set only on the initial
+transition; retries never extend ExpiresAt or increase occupied seats. EXPIRED,
+CANCELLED, and elapsed HELD records return `409`; elapsed HELD is persisted as
+EXPIRED and never confirmed.
+
+```bash
+curl -i -X DELETE http://localhost:8080/holds/019a69d3-1c00-7000-8000-000000000002 \
+  -H 'X-Student-Id: 20152691234567890'
+```
+
+Cancellation of owned HELD or CONFIRMED admissions returns `204` with no body,
+marks only that UUID CANCELLED, and sets CancelledAt. It releases the seat without
+deleting the historical row or clearing ConfirmedAt. Repeated owner cancellation
+returns `204` without changing timestamps. Cancelling an EXPIRED record returns
+`409`; an elapsed HELD record is first persisted as EXPIRED, then returns `409`.
+Cancelling an older UUID never cancels a later replacement for the same student.
+
+```bash
+curl -i http://localhost:8080/me/holds \
+  -H 'X-Student-Id: 20152691234567890'
+```
+
+Returns `200` with only the requesting student's current and historical records,
+ordered by CreatedAt descending then UUID ascending, or `[]` when none exist:
+
+```json
+[
+  {"holdId":"019a69d3-1c00-7000-8000-000000000002","classId":"019a69d3-1c00-7000-8000-000000000001","className":"Class 6 - Morning Shift","status":"CONFIRMED","expiresAt":"2026-11-10T14:10:00Z"}
+]
+```
+
+Confirm, cancel, and My Holds require the same single, exactly 17 ASCII digit
+`X-Student-Id` header as creation. Missing, malformed, whitespace-padded, Unicode,
+and multiple values return `400`. Malformed hold UUIDs return `400`; unknown UUIDs
+return `404`. Ownership mismatches on confirm/cancel also return `404` with no
+student information and no state change, including for stale records.
+
+Lifecycle operations use READ COMMITTED transactions. They first resolve only
+the hold's class UUID, lock the class row using the shared parameterized
+`SELECT ... FOR UPDATE` helper, then lock and reread the targeted hold row. No
+tracked hold is loaded before waiting. Decisions use fresh UTC time after both
+locks, matching M4's class-first order and serializing against reservations.
+Success and any deliberate expiry normalization commit before responses. Other
+failure paths roll back on transaction disposal. Confirmation moves one occupied
+seat from HELD to CONFIRMED; cancellation releases it. No counters are stored.
+
+Public hold GET safely persists expiry of its targeted stale HELD record under
+these locks, without changing terminal states or unrelated records. My Holds
+uses one no-tracking projection/join for class names and effective status; it
+does not write or lock multiple classes. It reports EXPIRED when HELD and
+ExpiresAt <= its captured UTC time. Class GET endpoints remain read-only.
+
+### Prototype assumptions for later ASSUMPTIONS.md
+
+- Public hold lookup without a student header follows the assignment contract.
+  A UUID acts as a lookup token; this is not strong authentication. The response
+  omits StudentId, but a known UUID reveals class, status, and expiry.
+- Header-only identification is not proof of identity. Ownership checks prevent
+  writes with a different header value; stronger authentication is outside this
+  prototype's specification. My Holds filters by that provided identity.
+- Cancellation is allowed for both HELD and CONFIRMED admissions in this
+  prototype. EXPIRED cancellation returns 409; CANCELLED retries return 204.
+- Expiry wins over late confirmation. Confirmed admissions never expire based
+  on the original hold timestamp.
+- Confirmation represents the workflow's verified-fee step. No actual payment
+  verification or gateway is implemented.
+- M6 will handle background expiry persistence. No worker or scheduler exists
+  in M5.
 
 ## Real PostgreSQL tests
 
@@ -252,6 +347,24 @@ separate test proves another class can commit while the first class is locked,
 and verifies the waiting request's decision timestamp is after lock release.
 Tests also cover headers, TTL/default options binding, full/duplicate conflicts,
 history preservation, stale reapplication, and rollback of normalization on 409.
+
+Run the M5 tests with:
+
+```bash
+dotnet test SchoolAdmission.sln --no-build --filter 'FullyQualifiedName~HoldLifecycle' --logger 'console;verbosity=detailed'
+```
+
+M5 reuses the guarded committed-data scope and isolated test collection from M4.
+Contract cases cover exact JSON fields, missing/malformed/multiple headers,
+ownership, expiry, idempotent retries, cancellation of confirmed admissions,
+replacement history, student isolation, ordering, and a one-query My Holds read.
+Concurrency cases use independent physical connections and two API hosts,
+observe every competing request waiting for an actual PostgreSQL class-row lock,
+and verify committed rows and class availability. Cases include repeated
+confirm/cancel requests, confirm versus cancel, cancellation versus reservations,
+late confirmation versus reapplication, and expiry-normalizing GET versus late
+confirmation. Lock-wait tests also alter the committed hold while a confirmation
+waits, proving that it rereads current state and captures time after the wait.
 
 The PostgreSQL suite checks valid persistence, all active-status duplicate pairs,
 expired/cancelled history, malformed birth-registration numbers, seat counts,

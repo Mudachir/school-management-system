@@ -7,6 +7,7 @@ using SchoolAdmission.Api.Configuration;
 using SchoolAdmission.Api.Contracts.Holds;
 using SchoolAdmission.Api.Data;
 using SchoolAdmission.Api.Domain;
+using SchoolAdmission.Api.Validation;
 
 namespace SchoolAdmission.Api.Controllers;
 
@@ -17,23 +18,16 @@ public sealed class HoldsController(AppDbContext context, IOptions<HoldOptions> 
     [HttpPost]
     public async Task<ActionResult<CreatedHoldResponse>> Create(Guid classId, CancellationToken cancellationToken)
     {
-        var values = Request.Headers["X-Student-Id"];
-        var studentId = values.Count == 1 ? values[0] : null;
-        if (studentId is null || studentId.Length != 17 || studentId.Any(character => character is < '0' or > '9'))
+        if (!StudentIdHeader.TryRead(Request.Headers, out var studentId))
         {
-            ModelState.AddModelError("X-Student-Id", "X-Student-Id must contain exactly 17 ASCII digits.");
+            ModelState.AddModelError(StudentIdHeader.Name, StudentIdHeader.ValidationMessage);
             return ValidationProblem(ModelState);
         }
 
         await using var transaction = await context.Database.BeginTransactionAsync(
             IsolationLevel.ReadCommitted, cancellationToken);
 
-        // Materialize the targeted SQL directly; do not compose an EF query over
-        // FOR UPDATE. Every allocation takes this same class-row lock first.
-        var classes = await context.AdmissionClasses.FromSqlInterpolated($"""
-            SELECT * FROM "AdmissionClasses" WHERE "Id" = {classId} FOR UPDATE
-            """).AsNoTracking().ToListAsync(cancellationToken);
-        var admissionClass = classes.SingleOrDefault();
+        var admissionClass = await ClassRowLock.AcquireAsync(context, classId, cancellationToken);
         if (admissionClass is null)
             return NotFound();
 
