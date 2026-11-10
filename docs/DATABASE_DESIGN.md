@@ -53,7 +53,35 @@ locks. The partial unique index remains an additional duplicate safeguard, and
 the existing schema/migration is unchanged.
 
 Class-name trimming is handled by M3 class creation. Read APIs derive effective
-seat counts without updating history. Confirmation, cancellation, and background
-expiration remain deferred. No cached seat counters exist.
+seat counts without updating history. No cached seat counters exist.
+
+## M5 lifecycle semantics
+
+Confirmation, cancellation, and targeted public hold GET use READ COMMITTED
+transactions with the same class-first row lock as M4. A preliminary scalar
+lookup resolves the class ID without tracking the hold. After acquiring the class
+lock, the operation locks and rereads the targeted AdmissionHolds row and captures
+fresh UTC decision time. No action uses state cached before a lock wait.
+
+- HELD with ExpiresAt > decisionUtc can become CONFIRMED, setting ConfirmedAt
+  once. Reconfirming CONFIRMED is idempotent and never changes ExpiresAt.
+- HELD with ExpiresAt <= decisionUtc becomes EXPIRED. Public lookup persists this
+  targeted transition; owner confirm/cancel persists it before returning 409.
+  CONFIRMED, EXPIRED, and CANCELLED are never overwritten by expiry normalization.
+- Owner cancellation of HELD or CONFIRMED marks only that UUID CANCELLED and sets
+  CancelledAt, retaining any ConfirmedAt and all history. Repeated CANCELLED
+  cancellation is idempotent. EXPIRED cancellation returns 409.
+- Ownership mismatches return 404 without mutation. The public hold GET requires
+  no student header and omits StudentId, per the assignment.
+- My Holds returns only the supplied student's records in a read-only join/
+  projection, with stale HELD displayed as EXPIRED. It does not normalize multiple
+  classes or acquire their row locks. Class availability GETs remain read-only.
+
+Lifecycle responses follow commit, including deliberately persisted expiry on
+409. Other failures roll back. Confirmation preserves occupied capacity;
+cancellation releases it. The unchanged partial unique index permits a new
+active application after a historical row becomes EXPIRED or CANCELLED.
+Background expiry, actual payment verification, and stronger authentication
+remain outside M5. See the backend README for the prototype assumptions.
 
 See [backend/README.md](../backend/README.md) for local commands and API behavior.
