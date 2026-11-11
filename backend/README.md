@@ -3,10 +3,28 @@
 The backend is a single ASP.NET Core Web API targeting .NET 10, with an xUnit
 integration test project. Future modules will live within the API project.
 
+## Full-stack Docker deployment
+
+From the repository root, run `docker compose up --build -d`. The API is available
+at `http://localhost:8080`; Nginx also exposes it at `http://localhost:8088/api`.
+See the [root README](../README.md) for setup, test commands and volume-preserving
+shutdown. Stop a separately running development API before binding port 8080.
+
+The backend Dockerfile builds a published API and an EF migration bundle. Compose
+runs the bundle once after PostgreSQL becomes healthy and starts the API/worker
+only after migration succeeds. Existing migration history makes reruns safe;
+failed initialization blocks API startup. Runtime credentials come from the
+environment. The API itself still never applies migrations at startup.
+
+The full-stack project uses its own named volume. `compose.db.yml` remains the
+separate development/test configuration below. Neither workflow resets or deletes
+existing volumes. `/health` remains liveness; Docker additionally checks read-only
+`/classes` for database/schema readiness.
+
 From Git Bash:
 
 ```bash
-cd '/k/School Management/backend'
+cd backend
 dotnet restore SchoolAdmission.sln
 dotnet build SchoolAdmission.sln --no-restore
 dotnet test SchoolAdmission.sln --no-build

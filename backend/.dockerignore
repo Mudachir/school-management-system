@@ -1,0 +1,12 @@
+**/bin
+**/obj
+**/TestResults
+**/*.trx
+**/secrets.json
+**/.env
+**/.env.*
+**/*.user
+**/*.suo
+.vs
+.idea
+SchoolAdmission.Tests

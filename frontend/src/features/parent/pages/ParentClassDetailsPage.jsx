@@ -2,6 +2,7 @@ import { Link, useParams, useNavigate } from 'react-router-dom'
 import { useClassDetails } from '../../classes/hooks/useClassDetails.js'
 import LiveAnnouncement from '../../../components/ui/LiveAnnouncement.jsx'
 import RequestState from '../../../components/ui/RequestState.jsx'
+import RefreshNotice from '../../../components/ui/RefreshNotice.jsx'
 import ParentIntro from '../components/ParentIntro.jsx'
 import CapacitySummary from '../components/CapacitySummary.jsx'
 import EligibilityNotice from '../components/EligibilityNotice.jsx'
@@ -14,9 +15,10 @@ export default function ParentClassDetailsPage() {
   const navigate = useNavigate()
   const { eligibility } = useParentData()
   const action = useStudentAction(classId)
-  const { admissionClass, status, error, refresh, isLoading } = useClassDetails(classId)
+  const { admissionClass, status, error, refresh, isLoading, refreshError } = useClassDetails(classId)
   return <>
     <Link className="text-link back-link" to="/parent/classes">← Back to classes</Link>
+    <RefreshNotice error={refreshError} onRetry={refresh} />
     <LiveAnnouncement message={isLoading ? 'Loading class details.' : status === 'error' ? 'Class details unavailable.' : `Class details loaded for ${admissionClass.name}.`} />
     <LiveAnnouncement message={action.isPending ? 'Checking applications and holding your seat.' : action.error || eligibility.message} />
     <div aria-busy={isLoading}>{status !== 'success' ? <RequestState status={status} error={error} title={error?.status === 404 ? 'Class not found' : error?.status === 400 ? 'Invalid class ID' : undefined} subject="class details" onRetry={refresh} /> : <>
