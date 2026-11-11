@@ -8,15 +8,17 @@ import DashboardAnnouncement from './components/DashboardAnnouncement.jsx'
 import { useDashboardClasses } from './hooks/useDashboardClasses.js'
 import { summarizeClasses } from './model/dashboardSummary.js'
 import './dashboard.css'
+import RefreshNotice from '../../components/ui/RefreshNotice.jsx'
 
 export default function DashboardPage() {
-  const { classes, status, error, refresh, isLoading } = useDashboardClasses()
+  const { classes, status, error, refresh, isLoading, refreshError } = useDashboardClasses()
   const summary = status === 'success' ? summarizeClasses(classes) : null
 
   return (
     <section className="dashboard" aria-labelledby="dashboard-heading">
       <DashboardIntro onRefresh={refresh} isLoading={isLoading} />
       <DashboardAnnouncement status={status} classCount={classes?.length ?? 0} />
+      <RefreshNotice error={refreshError} onRetry={refresh} />
       <div aria-busy={isLoading}>
         {summary ? (
           <>

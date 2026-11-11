@@ -2,6 +2,7 @@ import { RefreshCw, Search } from 'lucide-react'
 import { useContext, useState } from 'react'
 import LiveAnnouncement from '../../../components/ui/LiveAnnouncement.jsx'
 import RequestState from '../../../components/ui/RequestState.jsx'
+import RefreshNotice from '../../../components/ui/RefreshNotice.jsx'
 import ClassesTable from '../components/ClassesTable.jsx'
 import CreateClassButton from '../components/CreateClassButton.jsx'
 import { ClassDataContext } from '../context/ClassDataContext.js'
@@ -10,7 +11,7 @@ import { filterClasses } from '../helpers/filterClasses.js'
 import '../classes.css'
 
 export default function ClassesPage() {
-  const { classes, status, error, refresh, isLoading } = useClasses()
+  const { classes, status, error, refresh, isLoading, refreshError } = useClasses()
   const revision = useContext(ClassDataContext)
   const [search, setSearch] = useState({ revision, query: '' })
   const query = search.revision === revision ? search.query : ''
@@ -28,6 +29,7 @@ export default function ClassesPage() {
         </div>
       </div>
       <LiveAnnouncement message={message} />
+      <RefreshNotice error={refreshError} onRetry={refresh} />
       <div aria-busy={isLoading}>
         {status !== 'success' ? <RequestState status={status} error={error} onRetry={refresh} /> : (
           <div className="soft-card classes-card">

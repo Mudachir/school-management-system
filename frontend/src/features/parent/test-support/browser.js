@@ -126,7 +126,10 @@ export async function startBrowser() {
           requests, errors, evaluate, waitFor,
           async goto(route) {
             await client.command('Page.navigate', { url: origin + route })
-            await waitFor('document.querySelector("h1")')
+            await waitFor('location.pathname === ' + JSON.stringify(route.split('?')[0]) + ' && document.readyState === "complete" && document.querySelector("h1")')
+          },
+          async click(selector) {
+            await waitFor('(() => { const element = document.querySelector(' + JSON.stringify(selector) + '); if (!element || element.disabled) return false; element.click(); return true; })()')
           },
           async fill(selector, value) {
             await evaluate('{ const element = document.querySelector(' + JSON.stringify(selector) + '); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(element, ' + JSON.stringify(value) + '); element.dispatchEvent(new Event("input", {bubbles:true})); }')

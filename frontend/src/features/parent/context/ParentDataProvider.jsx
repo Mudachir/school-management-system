@@ -16,26 +16,40 @@ export default function ParentDataProvider({ children }) {
     return () => { mounted.current = false; activeRead.current?.controller.abort() }
   }, [])
   const verify = useCallback(function verify(options = {}) {
+    options.signal?.throwIfAborted()
     if (!studentId) return Promise.reject(new Error('Select a student first.'))
     if (!mounted.current || !isCurrent()) return Promise.reject(new DOMException('Student changed', 'AbortError'))
-    if (options.fresh && activeRead.current) return activeRead.current.promise.catch(() => {}).then(() => verify())
+    if (activeRead.current?.controller.signal.aborted) activeRead.current = null
+    if (options.fresh && activeRead.current) return activeRead.current.promise.catch(() => {}).then(() => verify({ ...options, fresh: false }))
     if (activeRead.current) return activeRead.current.promise
     const controller = new AbortController()
+    const abort = () => controller.abort()
+    options.signal?.addEventListener('abort', abort, { once: true })
     const unregister = registerRequest(controller)
     const timeout = setTimeout(() => controller.abort(), 15000)
-    setState({ status: 'loading', applications: null, error: null })
+    const canPublish = () => mounted.current && isCurrent() && activeRead.current?.controller === controller
+    setState((previous) => options.background && previous.status === 'success'
+      ? { ...previous, isRefreshing: true }
+      : { status: 'loading', applications: null, error: null, refreshError: null, isRefreshing: false })
     const promise = getMyApplications(studentId, { signal: controller.signal })
       .then((applications) => {
-        if (controller.signal.aborted || !mounted.current || !isCurrent()) throw new DOMException('Student changed', 'AbortError')
-        setState({ status: 'success', applications, error: null })
+        if (controller.signal.aborted || !canPublish()) throw new DOMException('Student or route changed', 'AbortError')
+        setState({ status: 'success', applications, error: null, refreshError: null, isRefreshing: false })
         return applications
       })
       .catch((error) => {
-        if (mounted.current && isCurrent()) setState({ status: 'error', applications: null, error: new Error('Application status could not be verified. Please retry.') })
+        if (canPublish()) setState((previous) => {
+          if (options.signal?.aborted && previous.status === 'success') return { ...previous, isRefreshing: false }
+          const problem = new Error('Application status could not be verified. Please retry.')
+          return options.background && previous.status === 'success'
+            ? { ...previous, refreshError: problem, isRefreshing: false }
+            : { status: 'error', applications: null, error: problem, refreshError: null, isRefreshing: false }
+        })
         throw error
       })
       .finally(() => {
         clearTimeout(timeout); unregister()
+        options.signal?.removeEventListener('abort', abort)
         if (activeRead.current?.controller === controller) activeRead.current = null
       })
     activeRead.current = { controller, promise }

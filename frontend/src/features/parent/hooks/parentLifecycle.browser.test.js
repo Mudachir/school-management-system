@@ -152,7 +152,7 @@ describe('Parent Portal lifecycle browser regressions', { skip: !chromePath, con
       await page.waitFor('document.querySelector(".parent-status-held")')
       await page.evaluate('[...document.querySelectorAll("nav a")].find(e => e.textContent === "My Applications").click()')
       await page.waitFor('document.querySelectorAll(".parent-application-card").length === 2')
-      await page.evaluate('document.querySelectorAll(".parent-application-card a")[1].click()')
+      await page.click(`.parent-application-card a[href="/parent/holds/${otherHoldId}"]`)
       for (let attempt = 0; attempt < 200 && !state.detailGate; attempt++) await pause(25)
       assert.ok(state.detailGate)
       state.status = 'CANCELLED'

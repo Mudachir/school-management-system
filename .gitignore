@@ -13,3 +13,9 @@
 .env
 .env.*
 !.env.example
+
+# Local milestone prompts and Canva references; preserve locally, exclude submission
+/docs/FRONTEND_*_TASK.md
+/docs/canva_admin_reference.html
+/docs/[1-4].png
+/docs/pr[1-9].png

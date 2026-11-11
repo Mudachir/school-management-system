@@ -48,6 +48,19 @@ Actual deployment needs a web-server/reverse-proxy rule forwarding `/api/*` to
 the backend with `/api` stripped, plus an independent frontend SPA fallback to
 `index.html`. Vite's local proxy configuration is not a deployed hosting setup.
 
+The root Docker deployment now provides those rules through `nginx.conf.template`.
+Run `docker compose up --build -d` from the repository root, then open
+`http://localhost:8088/admin` or `http://localhost:8088/parent`. Nginx serves the
+production `dist/` build, preserves API error responses and supports direct SPA
+route reloads. Its server-side `API_PROXY_TARGET` defaults to `http://backend:8080`
+and is substituted at container startup; no backend URL is compiled into the
+browser bundle. See the [root README](../README.md) for configuration and tests.
+
+The two UI gaps identified by the PDF audit are now fixed: class counts refresh
+automatically and idle My Applications history reconciles due holds with the server.
+Browser reopening still requires re-entering the number, then saved applications
+recover. See [ASSUMPTIONS.md](../docs/ASSUMPTIONS.md) for requirements and limitations.
+
 Admin API contracts used:
 
 - `GET /classes`: class summaries with `id`, `name`, `totalSeats`, `heldSeats`,
@@ -136,9 +149,13 @@ metric cards, table/seat styling, and design tokens are reused.
 ## Data and state behavior
 
 GET requests have a 15-second timeout and cancel on unmount/parameter change.
-Snapshots are keyed by resource ID, refresh version, and creation revision, so a
-previous class cannot flash or overwrite the selected class. Refresh is manual,
-with no polling or overlapping active GETs. Errors never display false zero data.
+One shared class-resource hook serves Dashboard, Admission Classes, Class Details,
+Parent Browse and Parent Class Details. It refreshes five seconds after each read
+finishes. Manual refresh shares the same serial request guard. Class-ID changes
+and mutation revisions abort the old scope, so late responses cannot overwrite
+the current class. Routine background reads retain visible data; refresh failures
+show a retry notice alongside last-loaded counts. Initial loading/error/empty
+states remain distinct, and errors never fabricate zero counts.
 
 Dashboard totals sum actual response fields, including backend-provided
 availability. Zero classes produce zero totals and an informative empty state.
@@ -163,7 +180,8 @@ an optimistic or fabricated row.
 
 ## Visual reference and responsive behavior
 
-The unmodified Canva HTML and screenshots in `../docs/` guide the appearance.
+Local Canva HTML and screenshots guided the appearance. These design references
+are excluded from the submission; they are not required to build or run the app.
 No Canva SDK, CDN styling script, demo records, or manual prototype event wiring
 is executed. F1's 244px navy sidebar, white header, light workspace, blue accent,
 self-hosted DM Sans/Work Sans fonts, and rounded cards are retained. Updated text
@@ -215,6 +233,22 @@ checks (immediately, then after 2, 5, 10 and 20 seconds from each completed
 check). Checks stop on terminal status, errors, navigation or student changes.
 If the server still reports HELD after the budget, Refresh status remains
 available. The original `expiresAt` is never rewritten or restarted.
+
+My Applications schedules a shared `/me/holds` read when the earliest HELD expiry
+becomes due. Due records are coalesced into one request. The server alone determines
+EXPIRED/CANCELLED/CONFIRMED; a fast browser clock never permanently changes a badge.
+If a due record remains HELD, it receives at most five checks per record/expiry in
+that mounted view: at due time, then 2, 5, 10 and 20 seconds after completed reads.
+An exhausted budget offers manual refresh, which does not reset that budget.
+Background errors preserve last-loaded history and pause checks until recovery.
+Route/student changes abort reconciliation and discard late responses. Cancellation
+uses the same deduplicated read path; no overlapping reads or new endpoints exist.
+
+The final suite has 81 passing tests, including 26 browser regressions. New cases
+cover all five class views, slow requests, stale class/student responses, automatic
+expiry, clock skew, retry limits, route cleanup, failures and cancellation races.
+Live checks through Docker at `http://localhost:8088` verified the same seat/status
+updates without page reload. Backend, student storage and API contracts are unchanged.
 
 The Node test suite also runs isolated React lifecycle regressions in headless
 Chrome/Chromium (or Edge). It detects common installed browser paths; set

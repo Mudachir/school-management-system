@@ -2,6 +2,7 @@ import { ArrowLeft, RefreshCw } from 'lucide-react'
 import { Link, useParams } from 'react-router-dom'
 import LiveAnnouncement from '../../../components/ui/LiveAnnouncement.jsx'
 import RequestState from '../../../components/ui/RequestState.jsx'
+import RefreshNotice from '../../../components/ui/RefreshNotice.jsx'
 import ClassDetailsStats from '../components/ClassDetailsStats.jsx'
 import { useClassDetails } from '../hooks/useClassDetails.js'
 import { getUtilization } from '../helpers/utilization.js'
@@ -9,7 +10,7 @@ import '../classes.css'
 
 export default function ClassDetailsPage() {
   const { classId } = useParams()
-  const { admissionClass, status, error, refresh, isLoading } = useClassDetails(classId)
+  const { admissionClass, status, error, refresh, isLoading, refreshError } = useClassDetails(classId)
   const missing = error?.status === 404
   const invalid = error?.status === 400
   const title = missing ? 'Class not found' : invalid ? 'Invalid class ID' : undefined
@@ -17,6 +18,7 @@ export default function ClassDetailsPage() {
   return (
     <section className="classes-page class-details" aria-labelledby="class-details-heading">
       <Link className="text-link back-link" to="/admin/classes"><ArrowLeft size={16} aria-hidden="true" /> Back to classes</Link>
+      <RefreshNotice error={refreshError} onRetry={refresh} />
       <LiveAnnouncement message={isLoading ? 'Loading class details.' : status === 'error'
         ? (title ?? 'Unable to load class details. Use Retry to try again.') : `Class details loaded for ${admissionClass.name}.`} />
       <div aria-busy={isLoading}>
